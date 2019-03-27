@@ -37,7 +37,7 @@ var game_assets = {
             }
         },
       "player.jpg": {
-        tile: 200,
+        tile: 170,
         tileh: 250,
         map: {
           hero_idle: [0, 0],
@@ -53,9 +53,11 @@ var game_assets = {
 
 class Entity {
 
-    constructor(name) {
+    constructor(name, x = 0, y = 0) {
+        this.name = name;
         this.timers = [];
-        this.instance = Crafty.e(name + ', Canvas, Collision, Motion')
+        this.instance = Crafty.e(name + ', Canvas, Motion')
+            .attr({x: x, y: y})
             .bind("EnterFrame", () => {
                 this._evaluateTimers(this.timers);
             });
@@ -74,6 +76,10 @@ class Entity {
         if (this.sprite) {
             this.instance.addComponent(this.sprite);
         }
+        if (this.onCollision) {
+            this.instance.addComponent('Collision')
+            this.onCollisionInit();
+        }
     }
 
     /**
@@ -89,6 +95,12 @@ class Entity {
     onKeyReleaseInit() {
         this.instance.bind('KeyUp', (e) => {
             this.onKeyRelease(e.key);
+        });
+    }
+
+    onCollisionInit() {
+        this.instance.bind('HitOn', (e) => {
+            this.onCollision(e);
         });
     }
 
@@ -136,6 +148,34 @@ class Entity {
             .gravity(entity);
     }
 
+    setCollisionChecks(entities) {
+        for (let entity of entities) {
+            this.instance.checkHits(entity);
+        }
+    }
+
+    get x() {
+        return this.instance.x;
+    }
+
+    set x(x) {
+       this.instance.x = x; 
+    }
+
+    get y() {
+        return this.instance.y;
+    }
+
+    set y(y) {
+        this.instance.y = y;
+    }
+
+    createEntity(entity, x = 0, y = 0, xSpeed = 0, ySpeed = 0) {
+        let e = new entity(x, y);
+        e.setXVelocity(xSpeed);
+        e.setYVelocity(ySpeed);
+    }
+
     /**
      * Private Methods
      */
@@ -150,10 +190,19 @@ class Entity {
 
 }
 
+class Floater extends Entity {
+
+    constructor(x, y) {
+        super('Floater', x, y);
+        this.sprite = "mrs_right";
+        this.init();
+    }
+}
+
 class BadGuy extends Entity {
 
-    constructor() {
-        super('BadGuy');
+    constructor(x, y) {
+        super('BadGuy', x, y);
         this.direction = 'Right';
         this.addTimer(35, this.move);
         this.sprite = "mrs_right";
@@ -167,7 +216,6 @@ class BadGuy extends Entity {
             this.direction = 'Down';
             this.setXVelocity(0);
             this.setYVelocity(500);
-            new BadGuy();
         } else if (this.direction == 'Down') {
             this.changeSprite('mrs_left');
             this.direction = 'Left';
@@ -192,17 +240,17 @@ class Player extends Entity {
     
     constructor() {
         super('Player');
+        this.setGravity('Floor');
         this.health = 3;
         this.addTimer(300, () => console.log('This one worked too!'));
         this.sprite = "hero_idle";
         this.init();
+        this.setCollisionChecks(['BadGuy', 'Drop']);
     }
 
     onKeyPress(key) {
         if (key == keys.SPACE) {
-            console.log('SPACE PRESSED!!!');
-            this.addTimer(100, this.myTimer);
-            this.setGravity('Floor');
+            this.createEntity(Floater, this.x, this.y, 500, 500);
         } else if (key == keys.RIGHT_ARROW) {
             this.setXVelocity(200);
         } else if (key == keys.LEFT_ARROW) {
@@ -215,6 +263,15 @@ class Player extends Entity {
     onKeyRelease(key) {
         if (key == keys.RIGHT_ARROW || key == keys.LEFT_ARROW) {
             this.setXVelocity(0);
+        }
+    }
+
+    onCollision(data) {
+        if (this.instance.hit('BadGuy')) {
+            console.log('Hit BadGuy');
+            data[0].obj.destroy();
+        } else {
+            console.log('Hit something else.');
         }
     }
 
